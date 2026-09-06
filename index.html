@@ -542,7 +542,7 @@ const FB={on:false,db:null,auth:null,cargado:false,
     this.db.ref('oct/att').on('value',s=>{
       S.att=s.val()||{}; S.updated=Date.now(); status();
       if($('#wk').value){renderAsis(); if($('#v-est').classList.contains('on'))renderEst();}
-    },e=>{ this.on=false; status(); toast('Se perdió la conexión con la nube'); });
+    },e=>{ this.on=false; status(); notaNube('error'); toast('Se perdió la conexión con la nube'); });
   },
   set(ced,d,v){ if(!this.on)return Promise.reject(); return this.db.ref('oct/att/'+ced+'/'+d).set(v); },
   salir(){ this.auth.signOut().catch(()=>{}); location.reload(); }
@@ -691,8 +691,16 @@ $('#fileinp').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new Fi
   r.readAsText(f);};
 
 /* ============ INICIO ============ */
+function notaNube(estado){
+  const n=$('#cloud-note');
+  if(estado==='ok'){n.className='note ok';
+    n.innerHTML='<b>Guardado en la nube activo.</b> Cada cambio que registre aquí se graba al instante y lo ve cualquier persona autorizada que abra este enlace desde otra PC o teléfono.';}
+  else{n.className='note';
+    n.innerHTML='<b>Se perdió la conexión con la nube.</b> Los cambios que haga ahora <b>no se están guardando</b>. Revise su conexión a internet y recargue la página.';}
+}
 function arrancar(){
   llenarFiltros();
+  notaNube('ok');
   $('#wk').value=DB.semana_base;$('#ewk').value=DB.semana_base;
   $('#hs1').textContent=P.length;$('#hs2').textContent=S.roster.length;
   $('#hs3').textContent=new Set(S.roster.map(r=>r.estado)).size;
