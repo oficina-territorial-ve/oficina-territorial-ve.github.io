@@ -228,7 +228,7 @@ body.locked{overflow:hidden}
         <input id="g-pass" type="password" autocomplete="current-password" required placeholder="••••••••"></div>
       <button class="btn" id="gate-btn" type="submit">Entrar</button>
     </form>
-    <p class="gfoot">Si no tiene credenciales, solicítelas a la Oficina de Coordinación Territorial.<br>Los datos aquí contenidos son de carácter confidencial.</p>
+    <p class="gfoot">La sesión no queda guardada: cada vez que se abre el enlace hay que identificarse.<br>Si no tiene credenciales, solicítelas a la Oficina de Coordinación Territorial. Los datos aquí contenidos son de carácter confidencial.</p>
   </div>
  </div>
 </div>
@@ -328,7 +328,7 @@ body.locked{overflow:hidden}
   <div class="card pad" style="margin-bottom:14px">
     <p class="sect-t">Acceso y seguridad</p>
     <p style="margin:0 0 12px;font-size:14px;line-height:1.65">Los datos del personal y de la asistencia <b>no viajan dentro de esta página</b>: viven en la base de datos institucional en la nube y solo se descargan después de que usted se identifica. Quien abra el enlace sin credenciales no ve absolutamente nada.</p>
-    <p style="margin:0;font-size:14px;line-height:1.65">Cada cambio de asistencia se guarda al instante y lo ven todos los equipos conectados. Para autorizar a un nuevo funcionario, cree su cuenta en la consola de Firebase del proyecto <b>oct-asistencia</b>.</p>
+    <p style="margin:0;font-size:14px;line-height:1.65">Cada cambio de asistencia se guarda al instante y lo ven todos los equipos conectados. La sesión <b>no queda guardada en el navegador</b>: al cerrar o volver a abrir el enlace, el sistema vuelve a pedir correo y contraseña. Para autorizar a un nuevo funcionario, cree su cuenta en la consola de Firebase del proyecto <b>oct-asistencia</b>.</p>
     <div class="row" style="margin-top:14px"><span class="mut" style="font-size:13px" id="fb-st">Sesión iniciada</span></div>
   </div>
   <div class="card pad" style="margin-bottom:14px">
@@ -496,6 +496,9 @@ const FB={on:false,db:null,auth:null,cargado:false,
     await loadJS('https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js');
     firebase.initializeApp(FB_CFG);
     this.auth=firebase.auth();
+    // La sesión NO se guarda: cada vez que se abre el enlace hay que escribir las credenciales.
+    try{ await this.auth.setPersistence(firebase.auth.Auth.Persistence.NONE); }catch(e){}
+    try{ if(this.auth.currentUser) await this.auth.signOut(); }catch(e){}
     this.auth.onAuthStateChanged(u=>{ u? this.entrar(u) : this.mostrarLogin(); });
   },
   mostrarLogin(msg){
@@ -542,7 +545,7 @@ const FB={on:false,db:null,auth:null,cargado:false,
     },e=>{ this.on=false; status(); toast('Se perdió la conexión con la nube'); });
   },
   set(ced,d,v){ if(!this.on)return Promise.reject(); return this.db.ref('oct/att/'+ced+'/'+d).set(v); },
-  salir(){ this.auth.signOut(); location.reload(); }
+  salir(){ this.auth.signOut().catch(()=>{}); location.reload(); }
 };
 $('#gate-form').onsubmit=async e=>{
   e.preventDefault();
