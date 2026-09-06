@@ -511,19 +511,35 @@ const FB={on:false,db:null,auth:null,cargado:false,
     this.db=firebase.database();this.on=true;
     $('#who').textContent=u.email||'';
     setSync('conectando','Cargando datos…');
+    $('#gate-btn').textContent='Cargando datos…';
     try{
-      const [p,r,m]=await Promise.all([
-        this.db.ref('oct/personal').get(), this.db.ref('oct/roster').get(), this.db.ref('oct/meta').get()]);
-      DB.personal=(p.val()||[]).filter(Boolean);
-      S.roster=(r.val()||[]).filter(Boolean);
-      DB.semana_base=(m.val()&&m.val().semana_base)||'2026-08-31';
-    }catch(e){ this.mostrarLogin('No se pudieron cargar los datos: '+(e.message||e.code)); return; }
-    this.db.ref('oct/att').on('value',s=>{
-      S.att=s.val()||{}; S.updated=Date.now(); status();
-      renderAsis(); if($('#v-est').classList.contains('on'))renderEst();
-    },e=>{ status(); toast('Se perdió la conexión con la nube'); });
+      const leer=(ruta)=>new Promise((ok,no)=>{
+        let hecho=false;
+        const t=setTimeout(()=>{if(!hecho){hecho=true;no(new Error('La base de datos tardó demasiado en responder ('+ruta+'). Revise su conexión a internet.'));}},25000);
+        this.db.ref(ruta).once('value',
+          s=>{if(!hecho){hecho=true;clearTimeout(t);ok(s.val());}},
+          e=>{if(!hecho){hecho=true;clearTimeout(t);no(e);}});
+      });
+      const lista=v=>!v?[]:(Array.isArray(v)?v:Object.values(v)).filter(Boolean);
+      const personal=await leer('oct/personal');
+      DB.personal=lista(personal);
+      const roster=await leer('oct/roster');
+      S.roster=lista(roster);
+      const meta=await leer('oct/meta');
+      DB.semana_base=(meta&&meta.semana_base)||'2026-08-31';
+      if(!DB.personal.length&&!S.roster.length)throw new Error('La base de datos está vacía. Avise a la Oficina de Coordinación Territorial.');
+      S.att=(await leer('oct/att'))||{};
+    }catch(e){
+      this.on=false;
+      this.mostrarLogin('No se pudieron cargar los datos: '+(e&&(e.message||e.code)||'error desconocido'));
+      return;
+    }
     $('#gate').classList.add('off'); document.body.classList.remove('locked');
     arrancar();
+    this.db.ref('oct/att').on('value',s=>{
+      S.att=s.val()||{}; S.updated=Date.now(); status();
+      if($('#wk').value){renderAsis(); if($('#v-est').classList.contains('on'))renderEst();}
+    },e=>{ this.on=false; status(); toast('Se perdió la conexión con la nube'); });
   },
   set(ced,d,v){ if(!this.on)return Promise.reject(); return this.db.ref('oct/att/'+ced+'/'+d).set(v); },
   salir(){ this.auth.signOut(); location.reload(); }
