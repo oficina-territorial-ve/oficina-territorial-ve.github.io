@@ -163,9 +163,12 @@ select.est{border:1px solid var(--line);border-radius:7px;padding:5px 6px;font-s
 .dot{width:9px;height:9px;border-radius:99px;background:var(--nil);flex:none}
 .dot.on{background:var(--ok);box-shadow:0 0 0 3px var(--okbg)}
 .dot.cloud{background:var(--vac);box-shadow:0 0 0 3px var(--vacbg)}
+.dot.conectando{background:var(--gold);box-shadow:0 0 0 3px var(--repbg)}
+.dot.error{background:var(--bad);box-shadow:0 0 0 3px var(--badbg)}
 .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(140%);background:var(--navy);color:#fff;padding:12px 20px;border-radius:11px;font-weight:600;font-size:14px;box-shadow:0 12px 34px rgba(0,0,0,.3);z-index:200;transition:.28s;max-width:90vw;text-align:center}
 .toast.on{transform:translateX(-50%) translateY(0)}
 .note{background:#FFF9E6;border:1px solid #F0DFA8;border-left:4px solid var(--gold);border-radius:10px;padding:12px 15px;font-size:13.5px;margin-bottom:14px;line-height:1.5}
+.note.ok{background:var(--okbg);border-color:#BFE6D2;border-left-color:var(--ok)}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;margin:12px 0 0;color:var(--mut)}
 .legend span{display:flex;align-items:center;gap:6px}
 .sw{width:11px;height:11px;border-radius:3px;display:inline-block}
@@ -238,7 +241,7 @@ footer .f-bic{width:74px;height:auto}
 
 <!-- ============ ASISTENCIA ============ -->
 <section class="view" id="v-asis">
-  <div class="note" id="cloud-note"><b>Guardado automático activo (este equipo).</b> Cada cambio se graba al instante en este dispositivo. Para que los cambios se vean desde <b>otra PC o teléfono</b>, active la sincronización en la nube en la pestaña <b>Configuración</b>.</div>
+  <div class="note" id="cloud-note"><b>Conectando con la nube…</b> En unos segundos, cada cambio quedará guardado y visible desde cualquier PC o teléfono que abra este enlace.</div>
   <div class="toolbar">
     <label style="font-weight:700;font-size:12.5px">Semana del</label>
     <input type="date" id="wk">
@@ -283,7 +286,7 @@ footer .f-bic{width:74px;height:auto}
 <section class="view" id="v-cfg">
   <div class="card pad" style="margin-bottom:14px">
     <p class="sect-t">Sincronización en la nube (multi-dispositivo)</p>
-    <p style="margin:0 0 12px;font-size:14px;line-height:1.6">Pegue aquí la configuración de <b>Firebase Realtime Database</b> para que todos los cambios de asistencia se guarden en la nube y se vean desde cualquier PC o teléfono en tiempo real. Sin esto, el sistema guarda igual, pero solo en el dispositivo donde se escribe.</p>
+    <p style="margin:0 0 12px;font-size:14px;line-height:1.6">El sistema ya viene conectado al proyecto institucional <b>oct-asistencia</b> en Firebase: los cambios de asistencia se guardan en la nube y se ven en todos los equipos. Este cuadro solo hace falta si algún día desea apuntar el sistema a otro proyecto.</p>
     <textarea id="fbtxt" rows="9" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:12px;font:12.5px/1.5 ui-monospace,Menlo,Consolas,monospace" placeholder='{
   "apiKey": "…",
   "authDomain": "…firebaseapp.com",
@@ -444,38 +447,54 @@ function setEst(ced,d,v){if(!S.att[ced])S.att[ced]={};S.att[ced][d]=v;}
 function weekDays(m){m=monday(m);return [0,1,2,3,4].map(i=>addDays(m,i));}
 
 /* ============ FIREBASE (nube) ============ */
-const FB={on:false,db:null,cfg:null,
+const FB_CFG={
+  apiKey:"AIzaSyDUOnJUuzWtQsjcWPBQDc7ppJQjxTXNe7g",
+  authDomain:"oct-asistencia.firebaseapp.com",
+  databaseURL:"https://oct-asistencia-default-rtdb.firebaseio.com",
+  projectId:"oct-asistencia",
+  storageBucket:"oct-asistencia.firebasestorage.app",
+  messagingSenderId:"392487317029",
+  appId:"1:392487317029:web:210bcf00d9b72037d959cc"
+};
+const FB={on:false,db:null,cfg:null,ready:false,
   saved(){try{return JSON.parse(localStorage.getItem('oct_fb')||'null')}catch(e){return null}},
   async init(cfg,quiet){
     try{
+      setSync('conectando','Conectando…');
       if(!window.firebase){
         await loadJS('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');
+        await loadJS('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js');
         await loadJS('https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js');
       }
       if(!firebase.apps.length)firebase.initializeApp(cfg);
+      await firebase.auth().signInAnonymously();
       this.db=firebase.database();this.cfg=cfg;this.on=true;
-      localStorage.setItem('oct_fb',JSON.stringify(cfg));
+      if(cfg!==FB_CFG)localStorage.setItem('oct_fb',JSON.stringify(cfg));
       this.db.ref('oct/att').on('value',s=>{
         const r=s.val();
         if(r){S.att=Object.assign(S.att,r);try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}
           renderAsis();if($('#v-est').classList.contains('on'))renderEst();}
+        else if(!this.ready){this.push();}
+        this.ready=true;
       });
       this.db.ref('oct/roster').on('value',s=>{const r=s.val();if(r&&r.length){S.roster=r;renderAsis();}});
-      status();$('#fb-st').textContent='✓ Conectado a la nube';
+      status();$('#fb-st').textContent='✓ Conectado a la nube (proyecto '+cfg.projectId+')';
       if(!quiet){toast('Nube conectada. Los cambios se verán en todos los equipos.');this.push();}
-      $('#cloud-note').innerHTML='<b>Sincronización en la nube activa.</b> Cada cambio se guarda al instante y se ve desde cualquier PC o teléfono que abra este mismo enlace.';
+      $('#cloud-note').className='note ok';
+      $('#cloud-note').innerHTML='<b>Sincronización en la nube activa.</b> Cada cambio que usted registre se guarda al instante y lo ve cualquier persona que abra este mismo enlace, desde otra PC o teléfono.';
       return true;
-    }catch(e){this.on=false;status();$('#fb-st').textContent='✗ Error: '+e.message;if(!quiet)toast('No se pudo conectar: '+e.message);return false;}
+    }catch(e){this.on=false;status();setSync('error','Sin nube');
+      $('#fb-st').textContent='✗ Error: '+(e.message||e.code||e);
+      $('#cloud-note').innerHTML='<b>No se pudo conectar con la nube.</b> Los cambios se están guardando en este equipo y puede exportarlos a Excel. Detalle: '+esc(e.message||e.code||'sin conexión');
+      if(!quiet)toast('No se pudo conectar: '+(e.message||e.code));return false;}
   },
   push(){if(!this.on)return;this.db.ref('oct').update({att:S.att,roster:S.roster,updated:Date.now()}).catch(e=>toast('Nube: '+e.message));},
   set(ced,d,v){if(!this.on)return;this.db.ref('oct/att/'+ced+'/'+d).set(v).catch(()=>{});},
   off(){localStorage.removeItem('oct_fb');this.on=false;status();$('#fb-st').textContent='Desconectado (solo este equipo)';location.reload();}
 };
 function loadJS(src){return new Promise((ok,no)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=()=>no(new Error('Sin conexión al servicio'));document.head.appendChild(s);});}
-function status(){
-  $('#sdot').className='dot '+(FB.on?'cloud':'on');
-  $('#stxt').textContent=FB.on?'Nube · sincronizado':'Guardado local';
-}
+function setSync(cls,txt){$('#sdot').className='dot '+cls;$('#stxt').textContent=txt;}
+function status(){setSync(FB.on?'cloud':'on',FB.on?'Nube · sincronizado':'Guardado local');}
 $('#fb-save').onclick=async()=>{
   let t=$('#fbtxt').value.trim();
   if(!t){toast('Pegue la configuración de Firebase');return;}
@@ -485,7 +504,7 @@ $('#fb-save').onclick=async()=>{
   if(!cfg.databaseURL){toast('Falta "databaseURL". Active Realtime Database en Firebase.');return;}
   $('#fb-st').textContent='Conectando…';FB.init(cfg,false);
 };
-$('#fb-off').onclick=()=>FB.off();
+$('#fb-off').onclick=()=>{if(confirm('¿Desconectar la nube? Los cambios dejarán de compartirse entre equipos.'))FB.off();};
 
 /* ============ ASISTENCIA ============ */
 function estOpts(){const s=$('#a-est');ESTADOS.forEach(e=>{const o=document.createElement('option');o.value=e;o.textContent=e;s.appendChild(o);});}
@@ -518,7 +537,7 @@ $('#a-tab').addEventListener('change',e=>{
   s.className='est '+cls(s.value);
   save(false);FB.set(s.dataset.c,s.dataset.d,s.value);
   kpiAsis(weekDays($('#wk').value));
-  toast('Guardado'+(FB.on?' en la nube':' en este equipo'));
+  toast(FB.on?'Guardado en la nube · visible en todos los equipos':'Guardado en este equipo');
 });
 function kpiAsis(dd){
   const c={};ESTADOS.forEach(e=>c[e]=0);let tot=0;
@@ -627,7 +646,7 @@ $('#hs3').textContent=new Set(S.roster.map(r=>r.estado)).size;
 $('#fdate').textContent='Actualizado '+lblLong(iso(new Date()));
 $('#c-info').textContent='Personal: '+P.length+' registros · Asistencia: '+S.roster.length+' funcionarios · Último guardado: '+(S.updated?new Date(S.updated).toLocaleString('es-VE'):'—');
 renderDir();renderAsis();status();
-const cfg=FB.saved();if(cfg){$('#fbtxt').value=JSON.stringify(cfg,null,2);FB.init(cfg,true);}
+const cfg=FB.saved()||FB_CFG;$('#fbtxt').value=JSON.stringify(cfg,null,2);FB.init(cfg,true);
 </script>
 </body>
 </html>
