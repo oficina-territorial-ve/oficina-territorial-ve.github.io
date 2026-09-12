@@ -140,7 +140,9 @@ select.est{border:1px solid var(--line);border-radius:7px;padding:5px 6px;font-s
 .e-REPOSO{background:var(--repbg)!important;color:var(--rep)!important;border-color:#EEDFAE!important}
 .e-PERMISO{background:var(--perbg)!important;color:var(--per)!important;border-color:#D9CDF5!important}
 .e-INASISTENTE{background:var(--badbg)!important;color:var(--bad)!important;border-color:#F3C9C3!important}
-.e-SINREPORTE{background:var(--nilbg)!important;color:var(--nil)!important;border-color:#DCE1E9!important}
+.e-SINREPORTE{background:var(--nilbg)!important;color:#8A94A6!important;border-color:#DCE1E9!important}
+.e-REMOTO{background:#E2F4F5!important;color:#0E7C86!important;border-color:#B9E2E5!important}
+.e-NOLABORABLE{background:#E3E7ED!important;color:#4A5568!important;border-color:#CAD2DC!important}
 
 /* ---------- KPI ---------- */
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px}
@@ -295,7 +297,7 @@ body.locked{overflow:hidden}
     <select id="a-est"><option value="">Todos los estados</option></select>
     <button class="btn gold sm" id="a-xls">Exportar Excel</button>
     <button class="btn ghost sm" id="a-json">Respaldo</button>
-    <button class="btn ghost sm" id="a-imp">Importar</button>
+    <button class="btn ghost sm" id="a-imp">Cargar archivo</button>
     <div class="sync"><span class="dot on" id="sdot"></span><span id="stxt">Local</span></div>
   </div>
   <div class="kpis" id="a-kpi"></div>
@@ -306,7 +308,9 @@ body.locked{overflow:hidden}
     <span><i class="sw" style="background:#B8860B"></i>Reposo</span>
     <span><i class="sw" style="background:#7A4FCF"></i>Permiso</span>
     <span><i class="sw" style="background:#C0392B"></i>Inasistente</span>
-    <span><i class="sw" style="background:#7A8699"></i>Sin reporte</span>
+    <span><i class="sw" style="background:#0E7C86"></i>Remoto / trabajo en línea</span>
+    <span><i class="sw" style="background:#4A5568"></i>Día no laborable</span>
+    <span><i class="sw" style="background:#9AA5B5"></i>Sin reporte</span>
   </div>
 </section>
 
@@ -338,7 +342,7 @@ body.locked{overflow:hidden}
     <p class="sect-t">Datos y respaldo</p>
     <div class="row">
       <button class="btn ghost" id="c-exp">Descargar respaldo (JSON)</button>
-      <button class="btn ghost" id="c-imp">Restaurar respaldo</button>
+      <button class="btn" id="c-imp">Cargar datos desde archivo</button>
       <button class="btn ghost" id="c-reset" style="color:var(--bad)">Restablecer a datos originales</button>
     </div>
     <p class="mut" style="font-size:13px;margin:12px 0 0" id="c-info"></p>
@@ -393,8 +397,9 @@ function tituloSemana(dd){const a=parseISO(dd[0]),b=parseISO(dd[4]);
 const MESL=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 function lblLong(s){const d=parseISO(s);return DIAS_ES[d.getUTCDay()]+' '+d.getUTCDate()+' '+MES_ES[d.getUTCMonth()]+' '+d.getUTCFullYear();}
 
-const ESTADOS=['PRESENTE','VACACIONES','REPOSO','PERMISO','INASISTENTE','SIN REPORTE'];
-const COL={'PRESENTE':'#1B8A5A','VACACIONES':'#2D7DD2','REPOSO':'#B8860B','PERMISO':'#7A4FCF','INASISTENTE':'#C0392B','SIN REPORTE':'#7A8699'};
+const ESTADOS=['PRESENTE','REMOTO','VACACIONES','REPOSO','PERMISO','INASISTENTE','NO LABORABLE','SIN REPORTE'];
+const COL={'PRESENTE':'#1B8A5A','REMOTO':'#0E7C86','VACACIONES':'#2D7DD2','REPOSO':'#B8860B','PERMISO':'#7A4FCF','INASISTENTE':'#C0392B','NO LABORABLE':'#4A5568','SIN REPORTE':'#9AA5B5'};
+const LABORA=e=>e==='PRESENTE'||e==='REMOTO';
 const cls=e=>'e-'+e.replace(/\s/g,'');
 
 /* ============ NAVEGACIÓN ============ */
@@ -537,7 +542,7 @@ const FB={on:false,db:null,auth:null,cargado:false,
       const roster=await leer('oct/roster');
       S.roster=lista(roster);
       const meta=await leer('oct/meta');
-      DB.semana_base=(meta&&meta.semana_base)||'2026-08-31';
+      DB.semana_base=monday(iso(new Date()));
       if(!DB.personal.length&&!S.roster.length)throw new Error('La base de datos está vacía. Avise a la Oficina de Coordinación Territorial.');
       S.att=(await leer('oct/att'))||{};
     }catch(e){
@@ -604,12 +609,14 @@ $('#a-tab').addEventListener('change',e=>{
 function kpiAsis(dd){
   const c={};ESTADOS.forEach(e=>c[e]=0);let tot=0;
   S.roster.forEach(r=>dd.forEach(d=>{c[getEst(r.cedula,d)]++;tot++;}));
-  const rep=tot-c['SIN REPORTE'];
+  const base=tot-c['NO LABORABLE'];
+  const lab=c['PRESENTE']+c['REMOTO'];
+  const rep=base-c['SIN REPORTE'];
   $('#a-kpi').innerHTML=`
-   <div class="kpi g"><div class="lab">Presentes</div><div class="val" style="color:var(--ok)">${c['PRESENTE']}</div><div class="sub">${tot?(100*c['PRESENTE']/tot).toFixed(1):0}% de ${tot} registros</div></div>
+   <div class="kpi g"><div class="lab">Laborando</div><div class="val" style="color:var(--ok)">${lab}</div><div class="sub">${base?(100*lab/base).toFixed(1):0}% · presencial ${c['PRESENTE']} · remoto ${c['REMOTO']}</div></div>
    <div class="kpi b"><div class="lab">Vacaciones</div><div class="val" style="color:var(--vac)">${c['VACACIONES']}</div><div class="sub">reposo ${c['REPOSO']} · permiso ${c['PERMISO']}</div></div>
-   <div class="kpi r"><div class="lab">Inasistentes</div><div class="val" style="color:var(--bad)">${c['INASISTENTE']}</div><div class="sub">registros de la semana</div></div>
-   <div class="kpi y"><div class="lab">Sin reporte</div><div class="val" style="color:var(--nil)">${c['SIN REPORTE']}</div><div class="sub">cobertura ${tot?(100*rep/tot).toFixed(1):0}%</div></div>
+   <div class="kpi r"><div class="lab">Inasistentes</div><div class="val" style="color:var(--bad)">${c['INASISTENTE']}</div><div class="sub">${c['NO LABORABLE']} registros de día no laborable</div></div>
+   <div class="kpi y"><div class="lab">Sin reporte</div><div class="val" style="color:var(--nil)">${c['SIN REPORTE']}</div><div class="sub">cobertura ${base?(100*rep/base).toFixed(1):0}%</div></div>
    <div class="kpi"><div class="lab">Funcionarios</div><div class="val">${S.roster.length}</div><div class="sub">en ${new Set(S.roster.map(r=>r.estado)).size} estados</div></div>`;
 }
 $('#wk').onchange=()=>{$('#wk').value=monday($('#wk').value);renderAsis();};
@@ -626,12 +633,15 @@ function renderEst(){
   const perDia=dd.map(d=>{const c={};ESTADOS.forEach(e=>c[e]=0);S.roster.forEach(r=>c[getEst(r.cedula,d)]++);return c;});
   const tot={};ESTADOS.forEach(e=>tot[e]=perDia.reduce((a,c)=>a+c[e],0));
   const N=S.roster.length,T=N*dd.length;
-  const mejor=dd[perDia.map(c=>c.PRESENTE).indexOf(Math.max(...perDia.map(c=>c.PRESENTE)))];
+  const TB=T-tot['NO LABORABLE'];
+  const LAB=tot['PRESENTE']+tot['REMOTO'];
+  const labDia=perDia.map(c=>c['PRESENTE']+c['REMOTO']);
+  const mejor=dd[labDia.indexOf(Math.max(...labDia))];
   $('#e-kpi').innerHTML=`
-   <div class="kpi g"><div class="lab">Efectividad promedio</div><div class="val" style="color:var(--ok)">${(100*tot.PRESENTE/T).toFixed(1)}%</div><div class="sub">${tot.PRESENTE} de ${T} registros</div></div>
+   <div class="kpi g"><div class="lab">Efectividad promedio</div><div class="val" style="color:var(--ok)">${TB?(100*LAB/TB).toFixed(1):0}%</div><div class="sub">${LAB} de ${TB} registros laborables</div></div>
    <div class="kpi"><div class="lab">Funcionarios</div><div class="val">${N}</div><div class="sub">${new Set(S.roster.map(r=>r.estado)).size} estados del país</div></div>
-   <div class="kpi y"><div class="lab">Cobertura del reporte</div><div class="val" style="color:var(--gold)">${(100*(T-tot['SIN REPORTE'])/T).toFixed(1)}%</div><div class="sub">${tot['SIN REPORTE']} celdas sin reporte</div></div>
-   <div class="kpi b"><div class="lab">Mejor jornada</div><div class="val" style="font-size:21px;color:var(--vac)">${lbl(mejor)}</div><div class="sub">${Math.max(...perDia.map(c=>c.PRESENTE))} presentes</div></div>
+   <div class="kpi y"><div class="lab">Cobertura del reporte</div><div class="val" style="color:var(--gold)">${TB?(100*(TB-tot['SIN REPORTE'])/TB).toFixed(1):0}%</div><div class="sub">${tot['SIN REPORTE']} celdas sin reporte</div></div>
+   <div class="kpi b"><div class="lab">Mejor jornada</div><div class="val" style="font-size:21px;color:var(--vac)">${lbl(mejor)}</div><div class="sub">${Math.max(...labDia)} laborando</div></div>
    <div class="kpi r"><div class="lab">Novedades</div><div class="val" style="color:var(--bad)">${tot.VACACIONES+tot.REPOSO+tot.PERMISO+tot.INASISTENTE}</div><div class="sub">vac./reposo/permiso/inasist.</div></div>`;
 
   const mk=(id,cfg)=>{if(CH[id])CH[id].destroy();CH[id]=new Chart($('#'+id),cfg);};
@@ -645,15 +655,15 @@ function renderEst(){
    options:{responsive:true,maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'right',labels:{boxWidth:11,font:{size:11}}}}}});
 
   const est={};S.roster.forEach(r=>{const k=r.estado||'—';est[k]=est[k]||{p:0,t:0,n:0};est[k].n++;
-    dd.forEach(d=>{est[k].t++;if(getEst(r.cedula,d)==='PRESENTE')est[k].p++;});});
-  const ord=Object.entries(est).map(([k,v])=>[k,100*v.p/v.t,v.n,v]).sort((a,b)=>b[1]-a[1]);
+    dd.forEach(d=>{const v=getEst(r.cedula,d);if(v==='NO LABORABLE')return;est[k].t++;if(LABORA(v))est[k].p++;});});
+  const ord=Object.entries(est).map(([k,v])=>[k,v.t?100*v.p/v.t:0,v.n,v]).sort((a,b)=>b[1]-a[1]);
   mk('ch3',{type:'bar',data:{labels:ord.map(o=>o[0]),datasets:[{label:'% presente',data:ord.map(o=>+o[1].toFixed(1)),
     backgroundColor:ord.map(o=>o[1]>=75?'#1B8A5A':o[1]>=50?'#C9A227':o[1]>=25?'#E07B39':'#C0392B'),borderRadius:4}]},
    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
    scales:{x:{max:100,grid:{color:'#EDF0F5'},ticks:{callback:v=>v+'%'}},y:{grid:{display:false},ticks:{font:{size:10.5}}}}}});
 
   $('#e-tab thead').innerHTML='<tr><th>Estado</th><th style="text-align:center">Funcionarios</th>'+
-    ESTADOS.map(e=>`<th style="text-align:center">${e==='SIN REPORTE'?'S/REP.':e.slice(0,4)+'.'}</th>`).join('')+'<th style="width:190px">Efectividad</th></tr>';
+    ESTADOS.map(e=>`<th style="text-align:center">${({'SIN REPORTE':'S/REP.','NO LABORABLE':'NO LAB.','PRESENTE':'PRES.','REMOTO':'REM.','VACACIONES':'VAC.','REPOSO':'REP.','PERMISO':'PERM.','INASISTENTE':'INAS.'})[e]}</th>`).join('')+'<th style="width:190px">Efectividad</th></tr>';
   $('#e-tab tbody').innerHTML=ord.map(([k,pct,n])=>{
     const c={};ESTADOS.forEach(e=>c[e]=0);
     S.roster.filter(r=>(r.estado||'—')===k).forEach(r=>dd.forEach(d=>c[getEst(r.cedula,d)]++));
@@ -693,10 +703,20 @@ $('#a-json').onclick=bkp;$('#c-exp').onclick=bkp;
 function pedirArchivo(){$('#fileinp').value='';$('#fileinp').click();}
 $('#a-imp').onclick=pedirArchivo;$('#c-imp').onclick=pedirArchivo;
 $('#fileinp').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
-  r.onload=async()=>{try{const o=JSON.parse(r.result);if(!o.att)throw 0;
-    if(!confirm('Se van a sobrescribir en la nube los registros de asistencia de este respaldo. ¿Continuar?'))return;
-    await FB.db.ref('oct/att').update(o.att); toast('Respaldo restaurado en la nube');}
-    catch(err){toast('Archivo no válido. Use un respaldo .json de este sistema.');}};
+  r.onload=async()=>{
+    let o; try{o=JSON.parse(r.result);}catch(err){toast('El archivo no es un JSON válido.');return;}
+    if(!o.att&&!o.roster){toast('El archivo no contiene datos de asistencia.');return;}
+    const dias=o.att?new Set(Object.values(o.att).flatMap(x=>Object.keys(x))).size:0;
+    const gente=o.att?Object.keys(o.att).length:0;
+    if(!confirm('Se cargarán en la nube '+gente+' funcionarios y '+dias+' jornadas. Los registros existentes de esas jornadas serán reemplazados. ¿Continuar?'))return;
+    try{
+      if(o.roster&&o.roster.length){await FB.db.ref('oct/roster').set(o.roster);S.roster=o.roster;}
+      if(o.att)await FB.db.ref('oct/att').update(o.att);
+      if(o.personal&&o.personal.length){await FB.db.ref('oct/personal').set(o.personal);DB.personal=o.personal;}
+      toast('Datos cargados en la nube correctamente');
+      setTimeout(()=>location.reload(),1400);
+    }catch(err){toast('No se pudo cargar: '+((err&&err.message)||'error'));}
+  };
   r.readAsText(f);};
 
 /* ============ INICIO ============ */
