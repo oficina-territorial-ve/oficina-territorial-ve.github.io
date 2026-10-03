@@ -117,6 +117,8 @@ mark{background:#FFF1A8;color:inherit;padding:0 1px;border-radius:2px}
 .x:hover{background:rgba(255,255,255,.3)}
 .mbody{padding:6px 24px 24px}
 .ficha-wrap{display:grid;grid-template-columns:1fr 232px;gap:22px;align-items:start}
+.ficha-datos{grid-column:1;grid-row:1}
+.foto-box{grid-column:2;grid-row:1}
 .ficha-datos{min-width:0}
 .foto-box{position:sticky;top:6px}
 .foto-marco{width:232px;height:286px;border:1px solid var(--line);border-radius:12px;background:#F3F6FA;overflow:hidden;display:grid;place-items:center;box-shadow:0 2px 10px rgba(11,37,69,.09)}
@@ -124,7 +126,11 @@ mark{background:#FFF1A8;color:inherit;padding:0 1px;border-radius:2px}
 .foto-carga{font-size:12.5px;color:var(--mut)}
 .foto-sin{display:grid;place-items:center;gap:8px;color:#A9B4C4;font-size:12px;font-weight:600;letter-spacing:.3px}
 .foto-pie{margin-top:8px;text-align:center;font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--mut);line-height:1.35}
-@media(max-width:700px){.ficha-wrap{grid-template-columns:1fr}.foto-box{position:static;justify-self:center}.foto-marco{width:200px;height:246px}}
+@media(max-width:700px){.ficha-wrap{grid-template-columns:1fr}
+.ficha-datos,.foto-box{grid-column:1}
+.foto-box{grid-row:1;position:static;justify-self:center;margin-bottom:4px}
+.ficha-datos{grid-row:2}
+.foto-marco{width:206px;height:254px}}
 .fld{display:grid;grid-template-columns:190px 1fr;gap:10px;padding:11px 0;border-bottom:1px solid #EDF0F5;font-size:14px}
 .fld:last-child{border-bottom:0}
 .fld .k{color:var(--mut);font-size:11.5px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;padding-top:2px}
@@ -461,6 +467,7 @@ $('#f-clr').onclick=()=>{$('#q').value='';['#f-reg','#f-nom','#f-car','#f-sex'].
 
 $('#dir-grid').onclick=e=>{const f=e.target.closest('.ficha');if(!f)return;abrirFicha(P[+f.dataset.i]);};
 const FOTOS={};
+let NFOTOS=-1;
 async function cargarFoto(ced){
   if(FOTOS[ced]!==undefined)return FOTOS[ced];
   try{const s=await FB.db.ref('oct/fotos/'+ced).once('value');FOTOS[ced]=s.val()||null;}
@@ -484,19 +491,20 @@ function abrirFicha(p){
      <h2>${esc(p.nombre)}</h2><div class="sub">C.I. ${fmtCed(p.cedula)} · Registro N° ${p.n}</div></div>
     <div class="mbody">
       <div class="ficha-wrap">
-        <div class="ficha-datos">${F.map(([k,v])=>`<div class="fld"><div class="k">${k}</div><div class="v">${esc(v||'—')}</div></div>`).join('')}${asisHtml}</div>
         <aside class="foto-box" id="foto-box">
           <div class="foto-marco" id="foto-marco"><div class="foto-carga">Cargando foto…</div></div>
           <div class="foto-pie">${esc(asis?asis.estado:(p.region||p.ubicacion||'—'))}</div>
         </aside>
+        <div class="ficha-datos">${F.map(([k,v])=>`<div class="fld"><div class="k">${k}</div><div class="v">${esc(v||'—')}</div></div>`).join('')}${asisHtml}</div>
       </div>
       <div class="row" style="margin-top:18px"><button class="btn ghost" onclick="cerrar()">Cerrar</button>
       <button class="btn gold" onclick="window.print()">Imprimir ficha</button></div></div>`;
   $('#ov').classList.add('on');document.body.style.overflow='hidden';
   cargarFoto(p.cedula).then(src=>{
     const m=$('#foto-marco'); if(!m)return;
+    const icono='<svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>';
     m.innerHTML = src ? `<img src="${src}" alt="Fotografía de ${esc(p.nombre)}">`
-      : `<div class="foto-sin"><svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><span>Sin fotografía</span></div>`;
+      : `<div class="foto-sin">${icono}<span>${NFOTOS===0?'Fotografías no cargadas':'Sin fotografía'}</span></div>`;
   });
 }
 function cerrar(){$('#ov').classList.remove('on');document.body.style.overflow='';}
@@ -575,6 +583,7 @@ const FB={on:false,db:null,auth:null,cargado:false,
       DB.semana_base=monday(iso(new Date()));
       if(!DB.personal.length&&!S.roster.length)throw new Error('La base de datos está vacía. Avise a la Oficina de Coordinación Territorial.');
       S.att=(await leer('oct/att'))||{};
+      try{ const mf=await leer('oct/meta'); NFOTOS=(mf&&mf.nfotos)||0; }catch(e){ NFOTOS=0; }
     }catch(e){
       this.on=false;
       this.mostrarLogin('No se pudieron cargar los datos: '+(e&&(e.message||e.code)||'error desconocido'));
@@ -752,6 +761,7 @@ $('#fileinp').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new Fi
           await FB.db.ref('oct/fotos').update(lote);
           toast('Subiendo fotografías… '+Math.min(i+20,ks.length)+' de '+ks.length);
         }
+        await FB.db.ref('oct/meta').update({nfotos:ks.length,fotos_actualizado:new Date().toISOString()});
       }
       toast('Datos cargados en la nube correctamente');
       setTimeout(()=>location.reload(),1400);
@@ -773,7 +783,7 @@ function arrancar(){
   $('#wk').value=DB.semana_base;$('#ewk').value=DB.semana_base;
   $('#hs1').textContent=P.length;$('#hs2').textContent=S.roster.length;
   $('#hs3').textContent=new Set(S.roster.map(r=>r.estado)).size;
-  $('#c-info').textContent='Personal: '+P.length+' registros · Asistencia: '+S.roster.length+' funcionarios · Proyecto en la nube: '+FB_CFG.projectId;
+  $('#c-info').textContent='Personal: '+P.length+' registros · Asistencia: '+S.roster.length+' funcionarios · Fotografías cargadas: '+(NFOTOS<0?'—':NFOTOS)+' · Proyecto en la nube: '+FB_CFG.projectId;
   renderDir();renderAsis();status();
 }
 $('#fdate').textContent='Actualizado '+lblLong(iso(new Date()));
