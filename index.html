@@ -142,6 +142,7 @@ select.est{border:1px solid var(--line);border-radius:7px;padding:5px 6px;font-s
 .e-INASISTENTE{background:var(--badbg)!important;color:var(--bad)!important;border-color:#F3C9C3!important}
 .e-SINREPORTE{background:var(--nilbg)!important;color:#8A94A6!important;border-color:#DCE1E9!important}
 .e-REMOTO{background:#E2F4F5!important;color:#0E7C86!important;border-color:#B9E2E5!important}
+.e-COMISION{background:#E8F5E9!important;color:#2E8B3D!important;border-color:#C4E3C7!important}
 .e-NOLABORABLE{background:#E3E7ED!important;color:#4A5568!important;border-color:#CAD2DC!important}
 
 /* ---------- KPI ---------- */
@@ -309,6 +310,7 @@ body.locked{overflow:hidden}
     <span><i class="sw" style="background:#7A4FCF"></i>Permiso</span>
     <span><i class="sw" style="background:#C0392B"></i>Inasistente</span>
     <span><i class="sw" style="background:#0E7C86"></i>Remoto / trabajo en línea</span>
+    <span><i class="sw" style="background:#2E8B3D"></i>Comisión de servicio</span>
     <span><i class="sw" style="background:#4A5568"></i>Día no laborable</span>
     <span><i class="sw" style="background:#9AA5B5"></i>Sin reporte</span>
   </div>
@@ -397,9 +399,9 @@ function tituloSemana(dd){const a=parseISO(dd[0]),b=parseISO(dd[4]);
 const MESL=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 function lblLong(s){const d=parseISO(s);return DIAS_ES[d.getUTCDay()]+' '+d.getUTCDate()+' '+MES_ES[d.getUTCMonth()]+' '+d.getUTCFullYear();}
 
-const ESTADOS=['PRESENTE','REMOTO','VACACIONES','REPOSO','PERMISO','INASISTENTE','NO LABORABLE','SIN REPORTE'];
-const COL={'PRESENTE':'#1B8A5A','REMOTO':'#0E7C86','VACACIONES':'#2D7DD2','REPOSO':'#B8860B','PERMISO':'#7A4FCF','INASISTENTE':'#C0392B','NO LABORABLE':'#4A5568','SIN REPORTE':'#9AA5B5'};
-const LABORA=e=>e==='PRESENTE'||e==='REMOTO';
+const ESTADOS=['PRESENTE','REMOTO','COMISION','VACACIONES','REPOSO','PERMISO','INASISTENTE','NO LABORABLE','SIN REPORTE'];
+const COL={'PRESENTE':'#1B8A5A','REMOTO':'#0E7C86','COMISION':'#2E8B3D','VACACIONES':'#2D7DD2','REPOSO':'#B8860B','PERMISO':'#7A4FCF','INASISTENTE':'#C0392B','NO LABORABLE':'#4A5568','SIN REPORTE':'#9AA5B5'};
+const LABORA=e=>e==='PRESENTE'||e==='REMOTO'||e==='COMISION';
 const cls=e=>'e-'+e.replace(/\s/g,'');
 
 /* ============ NAVEGACIÓN ============ */
@@ -610,10 +612,10 @@ function kpiAsis(dd){
   const c={};ESTADOS.forEach(e=>c[e]=0);let tot=0;
   S.roster.forEach(r=>dd.forEach(d=>{c[getEst(r.cedula,d)]++;tot++;}));
   const base=tot-c['NO LABORABLE'];
-  const lab=c['PRESENTE']+c['REMOTO'];
+  const lab=c['PRESENTE']+c['REMOTO']+c['COMISION'];
   const rep=base-c['SIN REPORTE'];
   $('#a-kpi').innerHTML=`
-   <div class="kpi g"><div class="lab">Laborando</div><div class="val" style="color:var(--ok)">${lab}</div><div class="sub">${base?(100*lab/base).toFixed(1):0}% · presencial ${c['PRESENTE']} · remoto ${c['REMOTO']}</div></div>
+   <div class="kpi g"><div class="lab">Laborando</div><div class="val" style="color:var(--ok)">${lab}</div><div class="sub">${base?(100*lab/base).toFixed(1):0}% · presencial ${c['PRESENTE']} · remoto ${c['REMOTO']} · comisión ${c['COMISION']}</div></div>
    <div class="kpi b"><div class="lab">Vacaciones</div><div class="val" style="color:var(--vac)">${c['VACACIONES']}</div><div class="sub">reposo ${c['REPOSO']} · permiso ${c['PERMISO']}</div></div>
    <div class="kpi r"><div class="lab">Inasistentes</div><div class="val" style="color:var(--bad)">${c['INASISTENTE']}</div><div class="sub">${c['NO LABORABLE']} registros de día no laborable</div></div>
    <div class="kpi y"><div class="lab">Sin reporte</div><div class="val" style="color:var(--nil)">${c['SIN REPORTE']}</div><div class="sub">cobertura ${base?(100*rep/base).toFixed(1):0}%</div></div>
@@ -634,8 +636,8 @@ function renderEst(){
   const tot={};ESTADOS.forEach(e=>tot[e]=perDia.reduce((a,c)=>a+c[e],0));
   const N=S.roster.length,T=N*dd.length;
   const TB=T-tot['NO LABORABLE'];
-  const LAB=tot['PRESENTE']+tot['REMOTO'];
-  const labDia=perDia.map(c=>c['PRESENTE']+c['REMOTO']);
+  const LAB=tot['PRESENTE']+tot['REMOTO']+tot['COMISION'];
+  const labDia=perDia.map(c=>c['PRESENTE']+c['REMOTO']+c['COMISION']);
   const mejor=dd[labDia.indexOf(Math.max(...labDia))];
   $('#e-kpi').innerHTML=`
    <div class="kpi g"><div class="lab">Efectividad promedio</div><div class="val" style="color:var(--ok)">${TB?(100*LAB/TB).toFixed(1):0}%</div><div class="sub">${LAB} de ${TB} registros laborables</div></div>
@@ -663,7 +665,7 @@ function renderEst(){
    scales:{x:{max:100,grid:{color:'#EDF0F5'},ticks:{callback:v=>v+'%'}},y:{grid:{display:false},ticks:{font:{size:10.5}}}}}});
 
   $('#e-tab thead').innerHTML='<tr><th>Estado</th><th style="text-align:center">Funcionarios</th>'+
-    ESTADOS.map(e=>`<th style="text-align:center">${({'SIN REPORTE':'S/REP.','NO LABORABLE':'NO LAB.','PRESENTE':'PRES.','REMOTO':'REM.','VACACIONES':'VAC.','REPOSO':'REP.','PERMISO':'PERM.','INASISTENTE':'INAS.'})[e]}</th>`).join('')+'<th style="width:190px">Efectividad</th></tr>';
+    ESTADOS.map(e=>`<th style="text-align:center">${({'SIN REPORTE':'S/REP.','NO LABORABLE':'NO LAB.','PRESENTE':'PRES.','REMOTO':'REM.','COMISION':'COM.','VACACIONES':'VAC.','REPOSO':'REP.','PERMISO':'PERM.','INASISTENTE':'INAS.'})[e]}</th>`).join('')+'<th style="width:190px">Efectividad</th></tr>';
   $('#e-tab tbody').innerHTML=ord.map(([k,pct,n])=>{
     const c={};ESTADOS.forEach(e=>c[e]=0);
     S.roster.filter(r=>(r.estado||'—')===k).forEach(r=>dd.forEach(d=>c[getEst(r.cedula,d)]++));
