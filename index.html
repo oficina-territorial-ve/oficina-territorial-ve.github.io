@@ -109,13 +109,22 @@ mark{background:#FFF1A8;color:inherit;padding:0 1px;border-radius:2px}
 /* ---------- MODAL ---------- */
 .ov{position:fixed;inset:0;background:rgba(9,20,38,.62);backdrop-filter:blur(3px);display:none;z-index:100;padding:20px;overflow:auto}
 .ov.on{display:block}
-.modal{max-width:760px;margin:30px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.4)}
+.modal{max-width:860px;margin:30px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.4)}
 .mhead{background:linear-gradient(135deg,var(--navy),var(--navy3));color:#fff;padding:22px 24px;position:relative}
 .mhead h2{margin:0;font-size:20px;line-height:1.25;padding-right:40px}
 .mhead .sub{color:var(--gold-l);font-weight:700;margin-top:6px;font-size:15px}
 .x{position:absolute;top:16px;right:16px;background:rgba(255,255,255,.15);border:0;color:#fff;width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:18px;line-height:1}
 .x:hover{background:rgba(255,255,255,.3)}
 .mbody{padding:6px 24px 24px}
+.ficha-wrap{display:grid;grid-template-columns:1fr 232px;gap:22px;align-items:start}
+.ficha-datos{min-width:0}
+.foto-box{position:sticky;top:6px}
+.foto-marco{width:232px;height:286px;border:1px solid var(--line);border-radius:12px;background:#F3F6FA;overflow:hidden;display:grid;place-items:center;box-shadow:0 2px 10px rgba(11,37,69,.09)}
+.foto-marco img{width:100%;height:100%;object-fit:cover;display:block}
+.foto-carga{font-size:12.5px;color:var(--mut)}
+.foto-sin{display:grid;place-items:center;gap:8px;color:#A9B4C4;font-size:12px;font-weight:600;letter-spacing:.3px}
+.foto-pie{margin-top:8px;text-align:center;font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--mut);line-height:1.35}
+@media(max-width:700px){.ficha-wrap{grid-template-columns:1fr}.foto-box{position:static;justify-self:center}.foto-marco{width:200px;height:246px}}
 .fld{display:grid;grid-template-columns:190px 1fr;gap:10px;padding:11px 0;border-bottom:1px solid #EDF0F5;font-size:14px}
 .fld:last-child{border-bottom:0}
 .fld .k{color:var(--mut);font-size:11.5px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;padding-top:2px}
@@ -451,25 +460,44 @@ $('#q').oninput=renderDir;
 $('#f-clr').onclick=()=>{$('#q').value='';['#f-reg','#f-nom','#f-car','#f-sex'].forEach(s=>$(s).value='');renderDir();};
 
 $('#dir-grid').onclick=e=>{const f=e.target.closest('.ficha');if(!f)return;abrirFicha(P[+f.dataset.i]);};
+const FOTOS={};
+async function cargarFoto(ced){
+  if(FOTOS[ced]!==undefined)return FOTOS[ced];
+  try{const s=await FB.db.ref('oct/fotos/'+ced).once('value');FOTOS[ced]=s.val()||null;}
+  catch(e){FOTOS[ced]=null;}
+  return FOTOS[ced];
+}
 function abrirFicha(p){
   const asis=S.roster.find(a=>a.cedula===p.cedula);
   let asisHtml='';
   if(asis){
     const dd=weekDays($('#wk').value||DB.semana_base);
     asisHtml=`<div class="fld"><div class="k">Asistencia (${lbl(dd[0])} – ${lbl(dd[4])})</div><div class="v" style="display:flex;gap:5px;flex-wrap:wrap">`+
-      dd.map(d=>{const v=getEst(p.cedula,d);return `<span class="pill ${cls(v)}" style="background:${COL[v]}22;color:${COL[v]}">${lbl(d).split(' ')[0]} ${v==='SIN REPORTE'?'S/R':v[0]+v.slice(1).toLowerCase()}</span>`;}).join('')+`</div></div>`;
+      dd.map(d=>{const v=getEst(p.cedula,d);return `<span class="pill" style="background:${COL[v]}22;color:${COL[v]}">${lbl(d).split(' ')[0]} ${v==='SIN REPORTE'?'S/R':v[0]+v.slice(1).toLowerCase()}</span>`;}).join('')+`</div></div>`;
   }
-  const F=[['Cédula de identidad',fmtCed(p.cedula)],['Apellidos y nombres',p.nombre],['Sexo',p.sexo==='F'?'Femenino':p.sexo==='M'?'Masculino':'—'],
+  const F=[['Cédula de identidad',fmtCed(p.cedula)],['Sexo',p.sexo==='F'?'Femenino':p.sexo==='M'?'Masculino':'—'],
    ['Fecha de nacimiento',p.fnac?lblLong(p.fnac):'—'],['Edad',p.edad?p.edad+' años':'—'],['Cargo nominal',p.cargo_nominal],
    ['Cargo funcional',p.cargo_funcional],['Unidad de adscripción',p.unidad],['Ubicación física',p.ubicacion||'Sede central'],
    ['Región',p.region||'—'],['Nómina',p.nomina],['Fecha de ingreso',p.ingreso?lblLong(p.ingreso):'—'],
    ['Antigüedad',p.ingreso?(new Date().getFullYear()-parseISO(p.ingreso).getUTCFullYear())+' años aprox.':'—']];
   $('#mod').innerHTML=`<div class="mhead"><button class="x" onclick="cerrar()">✕</button>
      <h2>${esc(p.nombre)}</h2><div class="sub">C.I. ${fmtCed(p.cedula)} · Registro N° ${p.n}</div></div>
-    <div class="mbody">${F.map(([k,v])=>`<div class="fld"><div class="k">${k}</div><div class="v">${esc(v||'—')}</div></div>`).join('')}${asisHtml}
-    <div class="row" style="margin-top:18px"><button class="btn ghost" onclick="cerrar()">Cerrar</button>
-    <button class="btn gold" onclick="window.print()">Imprimir ficha</button></div></div>`;
+    <div class="mbody">
+      <div class="ficha-wrap">
+        <div class="ficha-datos">${F.map(([k,v])=>`<div class="fld"><div class="k">${k}</div><div class="v">${esc(v||'—')}</div></div>`).join('')}${asisHtml}</div>
+        <aside class="foto-box" id="foto-box">
+          <div class="foto-marco" id="foto-marco"><div class="foto-carga">Cargando foto…</div></div>
+          <div class="foto-pie">${esc(asis?asis.estado:(p.region||p.ubicacion||'—'))}</div>
+        </aside>
+      </div>
+      <div class="row" style="margin-top:18px"><button class="btn ghost" onclick="cerrar()">Cerrar</button>
+      <button class="btn gold" onclick="window.print()">Imprimir ficha</button></div></div>`;
   $('#ov').classList.add('on');document.body.style.overflow='hidden';
+  cargarFoto(p.cedula).then(src=>{
+    const m=$('#foto-marco'); if(!m)return;
+    m.innerHTML = src ? `<img src="${src}" alt="Fotografía de ${esc(p.nombre)}">`
+      : `<div class="foto-sin"><svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><span>Sin fotografía</span></div>`;
+  });
 }
 function cerrar(){$('#ov').classList.remove('on');document.body.style.overflow='';}
 $('#ov').onclick=e=>{if(e.target.id==='ov')cerrar();};
@@ -707,14 +735,24 @@ $('#a-imp').onclick=pedirArchivo;$('#c-imp').onclick=pedirArchivo;
 $('#fileinp').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
   r.onload=async()=>{
     let o; try{o=JSON.parse(r.result);}catch(err){toast('El archivo no es un JSON válido.');return;}
-    if(!o.att&&!o.roster){toast('El archivo no contiene datos de asistencia.');return;}
+    if(!o.att&&!o.roster&&!o.fotos){toast('El archivo no contiene datos reconocibles.');return;}
     const dias=o.att?new Set(Object.values(o.att).flatMap(x=>Object.keys(x))).size:0;
     const gente=o.att?Object.keys(o.att).length:0;
-    if(!confirm('Se cargarán en la nube '+gente+' funcionarios y '+dias+' jornadas. Los registros existentes de esas jornadas serán reemplazados. ¿Continuar?'))return;
+    const nf=o.fotos?Object.keys(o.fotos).length:0;
+    const res=[gente?gente+' funcionarios':'',dias?dias+' jornadas':'',nf?nf+' fotografías':''].filter(Boolean).join(', ');
+    if(!confirm('Se cargarán en la nube: '+res+'. ¿Continuar?'))return;
     try{
       if(o.roster&&o.roster.length){await FB.db.ref('oct/roster').set(o.roster);S.roster=o.roster;}
       if(o.att)await FB.db.ref('oct/att').update(o.att);
       if(o.personal&&o.personal.length){await FB.db.ref('oct/personal').set(o.personal);DB.personal=o.personal;}
+      if(o.fotos){
+        const ks=Object.keys(o.fotos);
+        for(let i=0;i<ks.length;i+=20){
+          const lote={};ks.slice(i,i+20).forEach(k=>lote[k]=o.fotos[k]);
+          await FB.db.ref('oct/fotos').update(lote);
+          toast('Subiendo fotografías… '+Math.min(i+20,ks.length)+' de '+ks.length);
+        }
+      }
       toast('Datos cargados en la nube correctamente');
       setTimeout(()=>location.reload(),1400);
     }catch(err){toast('No se pudo cargar: '+((err&&err.message)||'error'));}
