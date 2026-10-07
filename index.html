@@ -269,7 +269,7 @@ body.locked{overflow:hidden}
         <button id="salir" style="background:rgba(255,255,255,.12);border:0;color:#AEC3E0;font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;cursor:pointer;margin-top:3px">Cerrar sesión</button>
       </div>
       <div><b id="hs1">0</b>Personal</div>
-      <div><b id="hs2">0</b>Asistencia</div>
+      <div><b id="hs2">0</b>Fichas</div>
       <div><b id="hs3">0</b>Estados</div>
     </div>
   </div>
@@ -417,6 +417,10 @@ function lblLong(s){const d=parseISO(s);return DIAS_ES[d.getUTCDay()]+' '+d.getU
 const ESTADOS=['PRESENTE','REMOTO','COMISION','VACACIONES','REPOSO','PERMISO','INASISTENTE','NO LABORABLE','SIN REPORTE'];
 const COL={'PRESENTE':'#1B8A5A','REMOTO':'#0E7C86','COMISION':'#2E8B3D','VACACIONES':'#2D7DD2','REPOSO':'#B8860B','PERMISO':'#7A4FCF','INASISTENTE':'#C0392B','NO LABORABLE':'#4A5568','SIN REPORTE':'#9AA5B5'};
 const LABORA=e=>e==='PRESENTE'||e==='REMOTO'||e==='COMISION';
+const NO_ESTADO=['DIRECCION GENERAL','DIRECCIÓN GENERAL','CUERPO DE INSPECTORES'];
+const grupos=()=>[...new Set(S.roster.map(r=>r.estado).filter(Boolean))];
+const nEstados=()=>grupos().filter(g=>NO_ESTADO.indexOf(g)<0).length;
+const nDepend=()=>grupos().filter(g=>NO_ESTADO.indexOf(g)>=0).length;
 const cls=e=>'e-'+e.replace(/\s/g,'');
 
 /* ============ NAVEGACIÓN ============ */
@@ -656,7 +660,7 @@ function kpiAsis(dd){
    <div class="kpi b"><div class="lab">Vacaciones</div><div class="val" style="color:var(--vac)">${c['VACACIONES']}</div><div class="sub">reposo ${c['REPOSO']} · permiso ${c['PERMISO']}</div></div>
    <div class="kpi r"><div class="lab">Inasistentes</div><div class="val" style="color:var(--bad)">${c['INASISTENTE']}</div><div class="sub">${c['NO LABORABLE']} registros de día no laborable</div></div>
    <div class="kpi y"><div class="lab">Sin reporte</div><div class="val" style="color:var(--nil)">${c['SIN REPORTE']}</div><div class="sub">cobertura ${base?(100*rep/base).toFixed(1):0}%</div></div>
-   <div class="kpi"><div class="lab">Funcionarios</div><div class="val">${S.roster.length}</div><div class="sub">en ${new Set(S.roster.map(r=>r.estado)).size} estados</div></div>`;
+   <div class="kpi"><div class="lab">Funcionarios</div><div class="val">${S.roster.length}</div><div class="sub">${nEstados()} estados · ${nDepend()} dependencias centrales</div></div>`;
 }
 $('#wk').onchange=()=>{$('#wk').value=monday($('#wk').value);renderAsis();};
 $('#wk-prev').onclick=()=>{$('#wk').value=addDays($('#wk').value,-7);renderAsis();};
@@ -678,7 +682,7 @@ function renderEst(){
   const mejor=dd[labDia.indexOf(Math.max(...labDia))];
   $('#e-kpi').innerHTML=`
    <div class="kpi g"><div class="lab">Efectividad promedio</div><div class="val" style="color:var(--ok)">${TB?(100*LAB/TB).toFixed(1):0}%</div><div class="sub">${LAB} de ${TB} registros laborables</div></div>
-   <div class="kpi"><div class="lab">Funcionarios</div><div class="val">${N}</div><div class="sub">${new Set(S.roster.map(r=>r.estado)).size} estados del país</div></div>
+   <div class="kpi"><div class="lab">Funcionarios</div><div class="val">${N}</div><div class="sub">${nEstados()} estados · ${nDepend()} dependencias</div></div>
    <div class="kpi y"><div class="lab">Cobertura del reporte</div><div class="val" style="color:var(--gold)">${TB?(100*(TB-tot['SIN REPORTE'])/TB).toFixed(1):0}%</div><div class="sub">${tot['SIN REPORTE']} celdas sin reporte</div></div>
    <div class="kpi b"><div class="lab">Mejor jornada</div><div class="val" style="font-size:21px;color:var(--vac)">${lbl(mejor)}</div><div class="sub">${Math.max(...labDia)} laborando</div></div>
    <div class="kpi r"><div class="lab">Novedades</div><div class="val" style="color:var(--bad)">${tot.VACACIONES+tot.REPOSO+tot.PERMISO+tot.INASISTENTE}</div><div class="sub">vac./reposo/permiso/inasist.</div></div>`;
@@ -782,7 +786,7 @@ function arrancar(){
   notaNube('ok');
   $('#wk').value=DB.semana_base;$('#ewk').value=DB.semana_base;
   $('#hs1').textContent=P.length;$('#hs2').textContent=S.roster.length;
-  $('#hs3').textContent=new Set(S.roster.map(r=>r.estado)).size;
+  $('#hs3').textContent=nEstados();
   $('#c-info').textContent='Personal: '+P.length+' registros · Asistencia: '+S.roster.length+' funcionarios · Fotografías cargadas: '+(NFOTOS<0?'—':NFOTOS)+' · Proyecto en la nube: '+FB_CFG.projectId;
   renderDir();renderAsis();status();
 }
