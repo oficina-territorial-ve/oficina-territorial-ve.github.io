@@ -308,7 +308,7 @@ body.locked{overflow:hidden}
     <button class="btn ghost sm" id="wk-prev">‹ Semana anterior</button>
     <input type="date" id="wk" title="Elija cualquier lunes para cargar esa semana">
     <button class="btn ghost sm" id="wk-next">Semana siguiente ›</button>
-    <span id="wk-tit" style="font-weight:700;font-size:13px;color:var(--navy)"></span>
+    <span id="wk-tit" style="font-weight:700;font-size:13px;color:var(--navy)"></span><span id="wk-aviso" style="display:none;font-size:12px;font-weight:700;color:#B8860B;background:#FBF3DD;border:1px solid #EEDFAE;border-radius:7px;padding:4px 9px"></span>
     <input type="search" id="aq" placeholder="Filtrar funcionario o cédula…" style="min-width:200px">
     <select id="a-est"><option value="">Todos los estados</option></select>
     <button class="btn gold sm" id="a-xls">Exportar Excel</button>
@@ -584,9 +584,14 @@ const FB={on:false,db:null,auth:null,cargado:false,
       const roster=await leer('oct/roster');
       S.roster=lista(roster);
       const meta=await leer('oct/meta');
-      DB.semana_base=monday(iso(new Date()));
+      DB.semana_base=monday(iso(new Date()));  // provisional: se ajusta abajo con la ultima jornada cargada
       if(!DB.personal.length&&!S.roster.length)throw new Error('La base de datos está vacía. Avise a la Oficina de Coordinación Territorial.');
       S.att=(await leer('oct/att'))||{};
+      try{
+        let ult='';
+        for(const k in S.att){ for(const f in S.att[k]){ if(S.att[k][f]&&S.att[k][f]!=='SIN REPORTE'&&f>ult)ult=f; } }
+        if(ult)DB.semana_base=monday(ult);
+      }catch(e){}
       try{ const mf=await leer('oct/meta'); NFOTOS=(mf&&mf.nfotos)||0; }catch(e){ NFOTOS=0; }
     }catch(e){
       this.on=false;
@@ -620,6 +625,9 @@ function renderAsis(){
   const dd=weekDays($('#wk').value||DB.semana_base);
   const q=norm($('#aq').value.trim()), dq=$('#aq').value.replace(/\D/g,''), fe=$('#a-est').value;
   $('#wk-tit').textContent=tituloSemana(dd);
+  const hayDatos=S.roster.some(r=>dd.some(x=>getEst(r.cedula,x)!=='SIN REPORTE'));
+  $('#wk-aviso').textContent=hayDatos?'':'Esta semana todavía no tiene registros cargados.';
+  $('#wk-aviso').style.display=hayDatos?'none':'inline-block';
   const th=`<tr><th style="width:38px">N°</th><th>Funcionario</th><th>Cédula</th>`+
     dd.map(d=>`<th class="dia" style="text-align:center"><span class="d-nom">${lblDia(d)}</span><span class="d-fec">${lblFecha(d)}</span></th>`).join('')+`</tr>`;
   $('#a-tab thead').innerHTML=th;
