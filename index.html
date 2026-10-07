@@ -677,48 +677,100 @@ $('#aq').oninput=renderAsis;$('#a-est').onchange=renderAsis;
 
 /* ============ ESTADÍSTICAS ============ */
 let CH={};
+const CHART_GRUPOS=[
+  {k:'PRESENTE',     lab:'Presente',           col:'#157F4C', de:['PRESENTE']},
+  {k:'REMOTO',       lab:'Remoto / comisión',  col:'#35B8CF', de:['REMOTO','COMISION']},
+  {k:'VACACIONES',   lab:'Vacaciones',         col:'#2F6FD0', de:['VACACIONES']},
+  {k:'REPOSO',       lab:'Reposo',             col:'#D4880B', de:['REPOSO']},
+  {k:'PERMISO',      lab:'Permiso',            col:'#8A52D6', de:['PERMISO']},
+  {k:'INASISTENTE',  lab:'Inasistente',        col:'#C4392F', de:['INASISTENTE']},
+  {k:'NO LABORABLE', lab:'No laborable',       col:'#7C8A9A', de:['NO LABORABLE']},
+  {k:'SIN REPORTE',  lab:'Sin reporte',        col:'#C2CBD6', de:['SIN REPORTE']}
+];
+// escala divergente sobre la meta de 70% de efectividad
+const colEfect=p=>p>=85?'#0F6B40':p>=70?'#157F4C':p>=55?'#6FB98E':p>=40?'#E09B3D':'#C4392F';
 function renderEst(){
   const base=$('#ewk').value||$('#wk').value||DB.semana_base;
   $('#ewk').value=monday(base);
   const dd=weekDays(base);
   const perDia=dd.map(d=>{const c={};ESTADOS.forEach(e=>c[e]=0);S.roster.forEach(r=>c[getEst(r.cedula,d)]++);return c;});
   const tot={};ESTADOS.forEach(e=>tot[e]=perDia.reduce((a,c)=>a+c[e],0));
+  const g=(c,G)=>G.de.reduce((a,e)=>a+(c[e]||0),0);
   const N=S.roster.length,T=N*dd.length;
   const TB=T-tot['NO LABORABLE'];
   const LAB=tot['PRESENTE']+tot['REMOTO']+tot['COMISION'];
   const labDia=perDia.map(c=>c['PRESENTE']+c['REMOTO']+c['COMISION']);
   const mejor=dd[labDia.indexOf(Math.max(...labDia))];
+  const efe=TB?100*LAB/TB:0, cob=TB?100*(TB-tot['SIN REPORTE'])/TB:0;
   $('#e-kpi').innerHTML=`
-   <div class="kpi g"><div class="lab">Efectividad promedio</div><div class="val" style="color:var(--ok)">${TB?(100*LAB/TB).toFixed(1):0}%</div><div class="sub">${LAB} de ${TB} registros laborables</div></div>
+   <div class="kpi g"><div class="lab">Efectividad promedio</div><div class="val" style="color:${colEfect(efe)}">${efe.toFixed(1)}%</div><div class="sub">${LAB} de ${TB} registros laborables</div></div>
    <div class="kpi"><div class="lab">Funcionarios</div><div class="val">${N}</div><div class="sub">${nEstados()} estados · ${nDepend()} dependencias</div></div>
-   <div class="kpi y"><div class="lab">Cobertura del reporte</div><div class="val" style="color:var(--gold)">${TB?(100*(TB-tot['SIN REPORTE'])/TB).toFixed(1):0}%</div><div class="sub">${tot['SIN REPORTE']} celdas sin reporte</div></div>
+   <div class="kpi y"><div class="lab">Cobertura del reporte</div><div class="val" style="color:var(--gold)">${cob.toFixed(1)}%</div><div class="sub">${tot['SIN REPORTE']} celdas sin reporte</div></div>
    <div class="kpi b"><div class="lab">Mejor jornada</div><div class="val" style="font-size:21px;color:var(--vac)">${lbl(mejor)}</div><div class="sub">${Math.max(...labDia)} laborando</div></div>
    <div class="kpi r"><div class="lab">Novedades</div><div class="val" style="color:var(--bad)">${tot.VACACIONES+tot.REPOSO+tot.PERMISO+tot.INASISTENTE}</div><div class="sub">vac./reposo/permiso/inasist.</div></div>`;
 
-  const mk=(id,cfg)=>{if(CH[id])CH[id].destroy();CH[id]=new Chart($('#'+id),cfg);};
-  Chart.defaults.font.family="-apple-system,Segoe UI,Roboto,sans-serif";Chart.defaults.color='#5C6B85';
+  const mk=(id,cfg,plug)=>{if(plug)cfg.plugins=plug;if(CH[id])CH[id].destroy();CH[id]=new Chart($('#'+id),cfg);};
+  Chart.defaults.font.family="-apple-system,Segoe UI,Roboto,sans-serif";
+  Chart.defaults.color='#5C6B85';Chart.defaults.font.size=11;
+  const TT={backgroundColor:'#0B2545',titleColor:'#fff',bodyColor:'#DCE6F5',borderColor:'rgba(255,255,255,.15)',
+    borderWidth:1,padding:10,cornerRadius:8,displayColors:true,boxPadding:4};
+  const LEG={position:'bottom',labels:{boxWidth:10,boxHeight:10,usePointStyle:true,pointStyle:'rectRounded',padding:13,font:{size:11}}};
 
-  mk('ch1',{type:'bar',data:{labels:dd.map(lbl),datasets:ESTADOS.map(e=>({label:e,data:perDia.map(c=>c[e]),backgroundColor:COL[e],borderRadius:3}))},
-   options:{responsive:true,maintainAspectRatio:false,scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,grid:{color:'#EDF0F5'}}},
-   plugins:{legend:{position:'bottom',labels:{boxWidth:11,font:{size:11}}}}}});
+  /* 1 · barras apiladas por jornada */
+  mk('ch1',{type:'bar',
+    data:{labels:dd.map(lbl),datasets:CHART_GRUPOS.map(G=>({label:G.lab,data:perDia.map(c=>g(c,G)),
+      backgroundColor:G.col,borderRadius:4,borderWidth:2,borderColor:'#fff',borderSkipped:false,maxBarThickness:52}))},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      scales:{x:{stacked:true,grid:{display:false},border:{display:false}},
+              y:{stacked:true,grid:{color:'#EEF1F6'},border:{display:false},ticks:{precision:0}}},
+      plugins:{legend:LEG,tooltip:{...TT,callbacks:{footer:it=>'Total '+it.reduce((a,x)=>a+x.parsed.y,0)}}}}});
 
-  mk('ch2',{type:'doughnut',data:{labels:ESTADOS,datasets:[{data:ESTADOS.map(e=>tot[e]),backgroundColor:ESTADOS.map(e=>COL[e]),borderWidth:2,borderColor:'#fff'}]},
-   options:{responsive:true,maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'right',labels:{boxWidth:11,font:{size:11}}}}}});
+  /* 2 · dona con total al centro */
+  const totG=CHART_GRUPOS.map(G=>g(tot,G));
+  mk('ch2',{type:'doughnut',
+    data:{labels:CHART_GRUPOS.map(G=>G.lab),datasets:[{data:totG,backgroundColor:CHART_GRUPOS.map(G=>G.col),
+      borderWidth:3,borderColor:'#fff',hoverOffset:6}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
+      plugins:{legend:{position:'right',labels:{boxWidth:10,boxHeight:10,usePointStyle:true,pointStyle:'rectRounded',padding:10,font:{size:11}}},
+        tooltip:{...TT,callbacks:{label:c=>' '+c.label+': '+c.parsed+' ('+(100*c.parsed/T).toFixed(1)+'%)'}}}}},
+    [{id:'centro',afterDraw(ch){const{ctx,chartArea:a}=ch;if(!a)return;const x=(a.left+a.right)/2,y=(a.top+a.bottom)/2;
+      ctx.save();ctx.textAlign='center';
+      ctx.fillStyle='#0B2545';ctx.font='700 24px -apple-system,Segoe UI,Roboto,sans-serif';ctx.fillText(efe.toFixed(1)+'%',x,y+2);
+      ctx.fillStyle='#8A94A6';ctx.font='600 10px -apple-system,Segoe UI,Roboto,sans-serif';ctx.fillText('EFECTIVIDAD',x,y+20);
+      ctx.restore();}}]);
 
+  /* 3 · efectividad por dependencia */
   const est={};S.roster.forEach(r=>{const k=r.estado||'—';est[k]=est[k]||{p:0,t:0,n:0};est[k].n++;
     dd.forEach(d=>{const v=getEst(r.cedula,d);if(v==='NO LABORABLE')return;est[k].t++;if(LABORA(v))est[k].p++;});});
   const ord=Object.entries(est).map(([k,v])=>[k,v.t?100*v.p/v.t:0,v.n,v]).sort((a,b)=>b[1]-a[1]);
-  mk('ch3',{type:'bar',data:{labels:ord.map(o=>o[0]),datasets:[{label:'% presente',data:ord.map(o=>+o[1].toFixed(1)),
-    backgroundColor:ord.map(o=>o[1]>=75?'#1B8A5A':o[1]>=50?'#C9A227':o[1]>=25?'#E07B39':'#C0392B'),borderRadius:4}]},
-   options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
-   scales:{x:{max:100,grid:{color:'#EDF0F5'},ticks:{callback:v=>v+'%'}},y:{grid:{display:false},ticks:{font:{size:10.5}}}}}});
+  const cw3=$('#ch3').parentElement; cw3.style.height=Math.max(300,ord.length*24+56)+'px';
+  mk('ch3',{type:'bar',
+    data:{labels:ord.map(o=>o[0]),datasets:[{label:'Efectividad',data:ord.map(o=>+o[1].toFixed(1)),
+      backgroundColor:ord.map(o=>colEfect(o[1])),borderRadius:4,maxBarThickness:17}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      layout:{padding:{right:34,top:16}},
+      plugins:{legend:{display:false},
+        tooltip:{...TT,callbacks:{label:c=>' '+c.parsed.x+'% · '+ord[c.dataIndex][2]+' funcionarios'}}},
+      scales:{x:{max:100,grid:{color:'#EEF1F6'},border:{display:false},ticks:{callback:v=>v+'%'}},
+              y:{grid:{display:false},border:{display:false},ticks:{font:{size:10.5}}}}}},
+    [{id:'meta',afterDatasetsDraw(ch){const{ctx,chartArea:a,scales:s}=ch;if(!a)return;
+      const x=s.x.getPixelForValue(70);ctx.save();
+      ctx.strokeStyle='#C0392B';ctx.setLineDash([4,4]);ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.moveTo(x,a.top);ctx.lineTo(x,a.bottom);ctx.stroke();
+      ctx.setLineDash([]);ctx.fillStyle='#C0392B';ctx.font='700 9.5px -apple-system,Segoe UI,Roboto,sans-serif';
+      ctx.textAlign='center';ctx.fillText('META 70%',x,a.top-4);
+      ctx.textAlign='left';ctx.fillStyle='#5C6B85';ctx.font='700 10px -apple-system,Segoe UI,Roboto,sans-serif';
+      ch.getDatasetMeta(0).data.forEach((b,i)=>{ctx.fillText(ord[i][1].toFixed(0)+'%',b.x+6,b.y+3.5);});
+      ctx.restore();}}]);
 
-  $('#e-tab thead').innerHTML='<tr><th>Estado</th><th style="text-align:center">Funcionarios</th>'+
-    ESTADOS.map(e=>`<th style="text-align:center">${({'SIN REPORTE':'S/REP.','NO LABORABLE':'NO LAB.','PRESENTE':'PRES.','REMOTO':'REM.','COMISION':'COM.','VACACIONES':'VAC.','REPOSO':'REP.','PERMISO':'PERM.','INASISTENTE':'INAS.'})[e]}</th>`).join('')+'<th style="width:190px">Efectividad</th></tr>';
+  /* tabla de detalle */
+  const ABR={'SIN REPORTE':'S/REP.','NO LABORABLE':'NO LAB.','PRESENTE':'PRES.','REMOTO':'REM.','COMISION':'COM.','VACACIONES':'VAC.','REPOSO':'REP.','PERMISO':'PERM.','INASISTENTE':'INAS.'};
+  $('#e-tab thead').innerHTML='<tr><th>Dependencia</th><th style="text-align:center">Func.</th>'+
+    ESTADOS.map(e=>`<th style="text-align:center">${ABR[e]}</th>`).join('')+'<th style="width:190px">Efectividad</th></tr>';
   $('#e-tab tbody').innerHTML=ord.map(([k,pct,n])=>{
     const c={};ESTADOS.forEach(e=>c[e]=0);
     S.roster.filter(r=>(r.estado||'—')===k).forEach(r=>dd.forEach(d=>c[getEst(r.cedula,d)]++));
-    const col=pct>=75?'#1B8A5A':pct>=50?'#C9A227':pct>=25?'#E07B39':'#C0392B';
+    const col=colEfect(pct);
     return `<tr><td style="font-weight:700">${esc(k)}</td><td style="text-align:center" class="mono">${n}</td>`+
       ESTADOS.map(e=>`<td style="text-align:center" class="mono">${c[e]||'·'}</td>`).join('')+
       `<td><div class="row" style="gap:8px;flex-wrap:nowrap"><div class="bar" style="flex:1"><i style="width:${pct}%;background:${col}"></i></div><b class="mono" style="color:${col};font-size:12.5px;width:44px;text-align:right">${pct.toFixed(0)}%</b></div></td></tr>`;
