@@ -266,6 +266,7 @@ body.locked{overflow:hidden}
     <div class="hstat">
       <div style="text-align:right;border-right:1px solid rgba(255,255,255,.18);padding-right:16px">
         <b id="who" style="font-size:12px;font-weight:600;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">—</b>
+        <span id="rol" style="display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;padding:2px 7px;border-radius:5px;margin-top:3px"></span>
         <button id="salir" style="background:rgba(255,255,255,.12);border:0;color:#AEC3E0;font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;cursor:pointer;margin-top:3px">Cerrar sesión</button>
       </div>
       <div><b id="hs1">0</b>Personal</div>
@@ -355,7 +356,7 @@ body.locked{overflow:hidden}
     <p style="margin:0;font-size:14px;line-height:1.65">Cada cambio de asistencia se guarda al instante y lo ven todos los equipos conectados. La sesión <b>no queda guardada en el navegador</b>: al cerrar o volver a abrir el enlace, el sistema vuelve a pedir correo y contraseña. Para autorizar a un nuevo funcionario, cree su cuenta en la consola de Firebase del proyecto <b>oct-asistencia</b>.</p>
     <div class="row" style="margin-top:14px"><span class="mut" style="font-size:13px" id="fb-st">Sesión iniciada</span></div>
   </div>
-  <div class="card pad" style="margin-bottom:14px">
+  <div class="card pad solo-admin" style="margin-bottom:14px">
     <p class="sect-t">Datos y respaldo</p>
     <div class="row">
       <button class="btn ghost" id="c-exp">Descargar respaldo (JSON)</button>
@@ -522,6 +523,18 @@ function setEst(ced,d,v){if(!S.att[ced])S.att[ced]={};S.att[ced][d]=v;}
 function weekDays(m){m=monday(m);return [0,1,2,3,4].map(i=>addDays(m,i));}
 
 /* ============ NUBE (Firebase) ============ */
+const CUENTA_ADMIN='ofcoordinacionterritorial@gmail.com';
+let ADMIN=false;
+function aplicarPermisos(){
+  // Solo la cuenta administradora puede cargar archivos o restablecer la base.
+  ['#c-imp','#c-reset','#a-imp'].forEach(sel=>{const e=$(sel);if(e)e.style.display=ADMIN?'':'none';});
+  const cf=$('#v-cfg');
+  if(cf)cf.querySelectorAll('.solo-admin').forEach(e=>e.style.display=ADMIN?'':'none');
+  const r=$('#rol');
+  if(r){r.textContent=ADMIN?'Administrador':'Carga de asistencia';
+        r.style.background=ADMIN?'rgba(201,162,39,.22)':'rgba(255,255,255,.14)';
+        r.style.color=ADMIN?'#E7C65A':'#AEC3E0';}
+}
 const FB_CFG={
   apiKey:"AIzaSyDUOnJUuzWtQsjcWPBQDc7ppJQjxTXNe7g",
   authDomain:"oct-asistencia.firebaseapp.com",
@@ -568,6 +581,8 @@ const FB={on:false,db:null,auth:null,cargado:false,
   async entrar(u){
     this.db=firebase.database();this.on=true;
     $('#who').textContent=u.email||'';
+    ADMIN=(u.email||'').toLowerCase()===CUENTA_ADMIN;
+    aplicarPermisos();
     setSync('conectando','Cargando datos…');
     $('#gate-btn').textContent='Cargando datos…';
     try{
