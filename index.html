@@ -669,12 +669,21 @@ async function listarAccesos(){
   let v=null; try{ v=(await FB.db.ref('oct/usuarios').once('value')).val(); }catch(e){ return; }
   const us=Object.entries(v||{}).map(([uid,x])=>({uid,...x})).sort((a,b)=>(a.creado||'').localeCompare(b.creado||''));
   c.innerHTML='<p class="sect-t" style="margin:0 0 8px">Cuentas creadas ('+(us.length+1)+')</p>'+
-    '<div class="tw" style="max-height:none;box-shadow:none"><table><thead><tr><th>Funcionario</th><th>Correo</th><th style="width:150px">Rol</th><th style="width:130px">Creada</th></tr></thead><tbody>'+
-    '<tr><td style="font-weight:700">Oficina de Coordinación Territorial</td><td class="mono">'+esc(CUENTA_ADMIN)+'</td><td><span class="pill" style="background:#FBF3DD;color:#B8860B">Administrador</span></td><td class="mut">—</td></tr>'+
+    '<div class="tw" style="max-height:none;box-shadow:none"><table><thead><tr><th>Funcionario</th><th>Correo</th><th style="width:150px">Rol</th><th style="width:120px">Creada</th><th style="width:96px"></th></tr></thead><tbody>'+
+    '<tr><td style="font-weight:700">Oficina de Coordinación Territorial</td><td class="mono">'+esc(CUENTA_ADMIN)+'</td><td><span class="pill" style="background:#FBF3DD;color:#B8860B">Administrador</span></td><td class="mut">—</td><td></td></tr>'+
     us.map(u=>'<tr><td style="font-weight:700">'+esc(u.nombre||'—')+'</td><td class="mono">'+esc(u.correo||'')+'</td>'+
       '<td><span class="pill" style="background:#E5F0FB;color:#2D7DD2">Carga de asistencia</span></td>'+
-      '<td class="mut mono">'+esc((u.creado||'').slice(0,10))+'</td></tr>').join('')+
+      '<td class="mut mono">'+esc((u.creado||'').slice(0,10))+'</td>'+
+      '<td><button class="btn ghost sm quitar" data-uid="'+esc(u.uid)+'" data-mail="'+esc(u.correo||'')+'" style="color:var(--bad);border-color:#F3C9C3">Quitar</button></td></tr>').join('')+
     '</tbody></table></div>';
+  c.querySelectorAll('.quitar').forEach(btn=>btn.onclick=async()=>{
+    const mail=btn.dataset.mail;
+    if(!confirm('¿Quitar el acceso de '+mail+'?\n\nSe retira de la lista de autorizados. Recuerde que la cuenta en Firebase debe eliminarse aparte, en Authentication → Usuarios.'))return;
+    btn.disabled=true;btn.textContent='Quitando…';
+    try{ await FB.db.ref('oct/usuarios/'+btn.dataset.uid).remove();
+         msgAlta('Acceso retirado: '+mail,true); listarAccesos(); }
+    catch(e){ msgAlta('No se pudo quitar: '+(e.message||e.code)); btn.disabled=false;btn.textContent='Quitar'; }
+  });
 }
 if($('#u-crear'))$('#u-crear').onclick=async()=>{
   const nom=$('#u-nom').value.trim(), mail=$('#u-mail').value.trim().toLowerCase(), pass=$('#u-pass').value;
