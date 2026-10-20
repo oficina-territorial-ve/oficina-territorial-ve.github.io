@@ -353,8 +353,23 @@ body.locked{overflow:hidden}
   <div class="card pad" style="margin-bottom:14px">
     <p class="sect-t">Acceso y seguridad</p>
     <p style="margin:0 0 12px;font-size:14px;line-height:1.65">Los datos del personal y de la asistencia <b>no viajan dentro de esta página</b>: viven en la base de datos institucional en la nube y solo se descargan después de que usted se identifica. Quien abra el enlace sin credenciales no ve absolutamente nada.</p>
-    <p style="margin:0;font-size:14px;line-height:1.65">Cada cambio de asistencia se guarda al instante y lo ven todos los equipos conectados. La sesión <b>no queda guardada en el navegador</b>: al cerrar o volver a abrir el enlace, el sistema vuelve a pedir correo y contraseña. Para autorizar a un nuevo funcionario, cree su cuenta en la consola de Firebase del proyecto <b>oct-asistencia</b>.</p>
+    <p style="margin:0;font-size:14px;line-height:1.65">Cada cambio de asistencia se guarda al instante y lo ven todos los equipos conectados. La sesión <b>no queda guardada en el navegador</b>: al cerrar o volver a abrir el enlace, el sistema vuelve a pedir correo y contraseña. Para autorizar a un nuevo funcionario, créele su cuenta en el recuadro <b>Accesos al sistema</b>, justo abajo.</p>
     <div class="row" style="margin-top:14px"><span class="mut" style="font-size:13px" id="fb-st">Sesión iniciada</span></div>
+  </div>
+  <div class="card pad solo-admin" style="margin-bottom:14px">
+    <p class="sect-t">Accesos al sistema</p>
+    <p style="margin:0 0 14px;font-size:14px;line-height:1.65">Cree aquí la cuenta de cada funcionario que deba cargar asistencia. Entrarán por <b>este mismo enlace</b> y lo que registren se verá al instante en todos los equipos. Solo esta cuenta administradora puede cargar archivos o restablecer la base.</p>
+    <div class="row" style="align-items:flex-end;gap:10px">
+      <div style="flex:1;min-width:210px"><label style="display:block;font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--mut);margin-bottom:5px">Nombre del funcionario</label>
+        <input id="u-nom" type="text" placeholder="MARIA LAURA GUEVARA" style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
+      <div style="flex:1;min-width:210px"><label style="display:block;font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--mut);margin-bottom:5px">Correo</label>
+        <input id="u-mail" type="email" autocomplete="off" placeholder="correo@ejemplo.com" style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
+      <div style="flex:1;min-width:170px"><label style="display:block;font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--mut);margin-bottom:5px">Contraseña (mín. 6)</label>
+        <input id="u-pass" type="text" autocomplete="off" placeholder="clave que le dará" style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px"></div>
+      <button class="btn" id="u-crear">Crear acceso</button>
+    </div>
+    <p id="u-msg" style="display:none;font-size:13.5px;margin:12px 0 0;padding:10px 12px;border-radius:9px;line-height:1.5"></p>
+    <div id="u-lista" style="margin-top:16px"></div>
   </div>
   <div class="card pad solo-admin" style="margin-bottom:14px">
     <p class="sect-t">Datos y respaldo</p>
@@ -583,6 +598,7 @@ const FB={on:false,db:null,auth:null,cargado:false,
     $('#who').textContent=u.email||'';
     ADMIN=(u.email||'').toLowerCase()===CUENTA_ADMIN;
     aplicarPermisos();
+    if(ADMIN)setTimeout(listarAccesos,900);
     setSync('conectando','Cargando datos…');
     $('#gate-btn').textContent='Cargando datos…';
     try{
@@ -631,6 +647,53 @@ $('#gate-form').onsubmit=async e=>{
   catch(err){ FB.mostrarLogin(ERR[err.code]||('No se pudo entrar: '+(err.message||err.code))); }
 };
 $('#salir').onclick=()=>{ if(confirm('¿Cerrar la sesión en este equipo?'))FB.salir(); };
+
+
+/* ============ ALTA DE ACCESOS (solo administrador) ============ */
+const ERR_ALTA={
+ 'auth/email-already-in-use':'Ese correo ya tiene una cuenta en el sistema.',
+ 'auth/invalid-email':'El correo no tiene un formato válido.',
+ 'auth/weak-password':'La contraseña debe tener al menos 6 caracteres.',
+ 'auth/network-request-failed':'Sin conexión a internet.',
+ 'auth/operation-not-allowed':'El acceso por correo y contraseña está desactivado en el proyecto.'
+};
+function msgAlta(txt,ok){
+  const m=$('#u-msg'); if(!m)return;
+  m.style.display='block'; m.textContent=txt;
+  m.style.background=ok?'var(--okbg)':'var(--badbg)';
+  m.style.border='1px solid '+(ok?'#BFE6D2':'#F3C9C3');
+  m.style.color=ok?'var(--ok)':'var(--bad)';
+}
+async function listarAccesos(){
+  const c=$('#u-lista'); if(!c||!FB.on)return;
+  let v=null; try{ v=(await FB.db.ref('oct/usuarios').once('value')).val(); }catch(e){ return; }
+  const us=Object.entries(v||{}).map(([uid,x])=>({uid,...x})).sort((a,b)=>(a.creado||'').localeCompare(b.creado||''));
+  c.innerHTML='<p class="sect-t" style="margin:0 0 8px">Cuentas creadas ('+(us.length+1)+')</p>'+
+    '<div class="tw" style="max-height:none;box-shadow:none"><table><thead><tr><th>Funcionario</th><th>Correo</th><th style="width:150px">Rol</th><th style="width:130px">Creada</th></tr></thead><tbody>'+
+    '<tr><td style="font-weight:700">Oficina de Coordinación Territorial</td><td class="mono">'+esc(CUENTA_ADMIN)+'</td><td><span class="pill" style="background:#FBF3DD;color:#B8860B">Administrador</span></td><td class="mut">—</td></tr>'+
+    us.map(u=>'<tr><td style="font-weight:700">'+esc(u.nombre||'—')+'</td><td class="mono">'+esc(u.correo||'')+'</td>'+
+      '<td><span class="pill" style="background:#E5F0FB;color:#2D7DD2">Carga de asistencia</span></td>'+
+      '<td class="mut mono">'+esc((u.creado||'').slice(0,10))+'</td></tr>').join('')+
+    '</tbody></table></div>';
+}
+if($('#u-crear'))$('#u-crear').onclick=async()=>{
+  const nom=$('#u-nom').value.trim(), mail=$('#u-mail').value.trim().toLowerCase(), pass=$('#u-pass').value;
+  if(!nom){msgAlta('Escriba el nombre del funcionario.');return;}
+  if(!mail||!pass){msgAlta('Faltan el correo o la contraseña.');return;}
+  if(pass.length<6){msgAlta('La contraseña debe tener al menos 6 caracteres.');return;}
+  const btn=$('#u-crear'); btn.disabled=true; btn.textContent='Creando…';
+  try{
+    const seg=(firebase.apps||[]).find(a=>a.name==='alta')||firebase.initializeApp(FB_CFG,'alta');
+    const cred=await seg.auth().createUserWithEmailAndPassword(mail,pass);
+    const uid=cred.user.uid;
+    await seg.auth().signOut();
+    await FB.db.ref('oct/usuarios/'+uid).set({correo:mail,nombre:nom,creado:new Date().toISOString(),por:(FB.auth.currentUser||{}).email||''});
+    msgAlta('Acceso creado para '+nom+'. Ya puede entrar con '+mail+' en este mismo enlace.',true);
+    $('#u-nom').value='';$('#u-mail').value='';$('#u-pass').value='';
+    listarAccesos();
+  }catch(e){ msgAlta(ERR_ALTA[e.code]||('No se pudo crear: '+(e.message||e.code))); }
+  btn.disabled=false; btn.textContent='Crear acceso';
+};
 
 /* ============ ASISTENCIA ============ */
 function estOpts(){const s=$('#a-est');ESTADOS.forEach(e=>{const o=document.createElement('option');o.value=e;o.textContent=e;s.appendChild(o);});}
